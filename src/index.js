@@ -1,5 +1,6 @@
 import React from "react";
 import messages_en from "./translations/en.json";
+import messages_fr from "./translations/fr.json";
 import reducer from "./reducer";
 import { LocalOffer, Folder } from "@material-ui/icons";
 import ContributionPlansPage from "./pages/ContributionPlansPage";
@@ -30,7 +31,10 @@ const ROUTE_PAYMENT_PLAN = "paymentPlans/paymentPlan";
 const ROUTE_PAYMENT_PLAN_REPLACE = "paymentPlans/replacePaymentPlan";
 
 const DEFAULT_CONFIG = {
-    "translations": [{ key: "en", messages: messages_en }],
+    "translations": [
+        { key: "en", messages: messages_en },
+        { key: "fr", messages: messages_fr }
+    ],
     "reducers": [{ key: 'contributionPlan', reducer }],
     "refs": [
         { key: "contributionPlan.route.contributionPlans", ref: ROUTE_CONTRIBUTION_PLANS },
