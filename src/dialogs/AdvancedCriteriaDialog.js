@@ -44,7 +44,7 @@ const AdvancedCriteriaDialog = ({
 }) => {
 
   const [isOpen, setIsOpen] = useState(false);
-  const [currentFilter, setCurrentFilter] = useState({ field: "", filter: "", type: "", value: "", amount: "" })
+  const [currentFilter, setCurrentFilter] = useState({ field: "", filter: "", type: "", value: "", amount: "", referential: null, typeLocation: null })
   const [filters, setFilters] = useState(getDefaultAppliedCustomFilters());
 
   const getBenefitPlanDefaultCriteria = () => {
@@ -62,7 +62,9 @@ const AdvancedCriteriaDialog = ({
   };
 
   useEffect(() => {
-    const defaultAppliedCustomFilters = getDefaultAppliedCustomFilters();
+    // const defaultAppliedCustomFilters = getDefaultAppliedCustomFilters();
+    const defaultAppliedCustomFilters = filters;
+    console.log('filters', filters);
     if (!defaultAppliedCustomFilters.length) {
       setFilters(getBenefitPlanDefaultCriteria());
     } else {
@@ -117,18 +119,33 @@ const AdvancedCriteriaDialog = ({
     setFilters([]);
   };
 
+  const normalizeFilterValue = (value) => {
+    if (!value) return "";
+    if (typeof value === "object") {
+        return value.name || value.code || value.id || value.value || "";
+    }
+    return value;
+  };
+
   const saveCriteria = () => {
     setAppliedFiltersRowStructure(filters);
     const outputFilters = JSON.stringify(
-      filters.map(({ filter, value, field, type, amount }) => {
+      filters.map(({ filter, value, field, type, referential, typeLocation, amount }) => {
         return {
           amount: amount,
-          custom_filter_condition: `${field}__${filter}__${type}=${value}`
+          type: type,
+          referential: referential,
+          typeLocation: typeLocation,
+          filter: filter,
+          field: field,
+          value: value,
+          custom_filter_condition: `${field}__${filter}__${type}=${normalizeFilterValue(value)}`
         };
       })
     );
     const jsonExt = updateJsonExt(objectToSave.jsonExt, outputFilters)
     updateAttributes(jsonExt);
+    console.log('outputFilters', outputFilters);
     setAppliedCustomFilters(outputFilters);
     handleClose();
   };
