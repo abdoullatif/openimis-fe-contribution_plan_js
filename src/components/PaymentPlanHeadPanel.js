@@ -94,20 +94,34 @@ class PaymentPlanHeadPanel extends FormPanel {
         try {
           const jsonData = JSON.parse(jsonExt);
           const advancedCriteria = jsonData.advanced_criteria || [];
-          const parsedFilters = advancedCriteria.map(({ amount, custom_filter_condition }) => {
-            const [field, filter, typeValue] = custom_filter_condition.split('__');
-            const [type, value] = typeValue.split('=');
-            return {
-              amount,
-              custom_filter_condition,
-              field,
-              filter,
-              type,
-              value
-            };
-          });
-          return parsedFilters;
+          console.log("advancedCriteria", advancedCriteria);
+
+          return advancedCriteria.map(
+            ({ amount, type, field, value, referential, typeLocation, custom_filter_condition }) => {
+              let parsedValue = value;
+              try {
+                // Reconvertir les chaînes JSON en objets si possible (ex: Location)
+                if (typeof value === "string" && value.startsWith("{") && value.endsWith("}")) {
+                  parsedValue = JSON.parse(value);
+                }
+              } catch (err) {
+                parsedValue = value;
+              }
+
+              return {
+                amount,
+                custom_filter_condition,
+                field,
+                filter: custom_filter_condition?.split("__")?.[1] || "",
+                type,
+                referential,
+                typeLocation,
+                value: parsedValue,
+              };
+            }
+          );
         } catch (error) {
+          console.error("Erreur parsing advanced_criteria :", error);
           return [];
         }
       };
@@ -143,7 +157,7 @@ class PaymentPlanHeadPanel extends FormPanel {
 
         if (paymentPlanType) {
             // probably could get rid of that if we use double JSON.parse in reducer
-            const objectBenefitPlan = typeof paymentPlan.productOrBenefitPlan === 'object' ? 
+            const objectBenefitPlan = typeof paymentPlan.productOrBenefitPlan === 'object' ?
               paymentPlan.productOrBenefitPlan : JSON.parse(paymentPlan.productOrBenefitPlan || '{}');
             paymentPlan.benefitPlan = objectBenefitPlan;
             if (paymentPlanType === 'benefitplan' || paymentPlanType === 'benefit plan') {
@@ -163,9 +177,9 @@ class PaymentPlanHeadPanel extends FormPanel {
                             >
                                 <Grid item style={{ flex: 1, display: "flex" }}>
                                     <Typography style={{ marginTop: "6px" }}>
-                                        <FormattedMessage 
-                                          module="contributionPlan" 
-                                          id="paymentPlan.headPanel.title" 
+                                        <FormattedMessage
+                                          module="contributionPlan"
+                                          id="paymentPlan.headPanel.title"
                                         />
                                     </Typography>
                                 </Grid>
@@ -182,18 +196,18 @@ class PaymentPlanHeadPanel extends FormPanel {
                         </Fragment>
                     )}
                     {paymentPlan.id && (
-                      <Button 
+                      <Button
                         onClick={() => {
                           const currentDateObject = new Date();
                           const currentDate = currentDateObject.toISOString();
-                          paymentPlan.dateValidTo = currentDate;                      
+                          paymentPlan.dateValidTo = currentDate;
                           this.updateAttribute("dateValidTo", currentDate);
-                        }} 
-                        variant="outlined" 
-                        color="#DFEDEF" 
+                        }}
+                        variant="outlined"
+                        color="#DFEDEF"
                         className={classes.button}
                         disabled={readOnly}
-                        style={{ 
+                        style={{
                           border: "0px",
                           textAlign: "right",
                           display: "block",
