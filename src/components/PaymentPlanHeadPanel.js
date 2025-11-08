@@ -264,6 +264,7 @@ class PaymentPlanHeadPanel extends FormPanel {
                                     ? "product.ProductPicker"
                                     : "socialProtection.BenefitPlanPicker"}
                                 withNull={true}
+                                withLabel={true}
                                 readOnly={readOnly}
                                 label={formatMessage(intl, "paymentPlan", "benefitPlan")}
                                 required

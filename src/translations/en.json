@@ -60,7 +60,7 @@
     "paymentPlan.code": "Code",
     "paymentPlan.name": "Name",
     "paymentPlan.calculation": "Calculation Rule",
-    "paymentPlan.benefitPlan": "Benefit Product",
+    "paymentPlan.benefitPlan": "Programme",
     "paymentPlan.periodicity": "Periodicity (no of months)",
     "paymentPlan.dateValidFrom": "Valid from",
     "paymentPlan.dateValidTo": "Valid to",
@@ -99,5 +99,7 @@
     "paymentPlan.advancedCriteria.button.cancel": "Cancel",
     "paymentPlan.advancedCriteria.button.filter": "Confirm Criteria",
     "paymentPlanPicker.label": "Payment Plan Picker",
-    "paymentPlan.deactivatePaymentPlan": "Deactivate Payment Plan"
+    "paymentPlan.deactivatePaymentPlan": "Deactivate Payment Plan",
+    "paymentPlan.toast.requestSentForValidation": "Request sent for validation",
+    "paymentPlan.tasks.title": "Payment Plan Tasks"
 }

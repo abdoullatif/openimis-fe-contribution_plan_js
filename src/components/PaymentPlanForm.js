@@ -43,6 +43,11 @@ class PaymentPlanForm extends Component {
     }
 
     componentDidUpdate(prevProps, prevState, snapshot) {
+        // Refetch si paymentPlanId change (important pour le contexte de tâche)
+        if (prevProps.paymentPlanId !== this.props.paymentPlanId && !!this.props.paymentPlanId) {
+            this.props.fetchPaymentPlan(this.props.modulesManager, this.props.paymentPlanId);
+        }
+        
         if (prevProps.fetchedPaymentPlan !== this.props.fetchedPaymentPlan && !!this.props.fetchedPaymentPlan) {
             this.setState(
                 (_, props) => ({ paymentPlan: props.paymentPlan })

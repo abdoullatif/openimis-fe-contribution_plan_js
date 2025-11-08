@@ -1,5 +1,6 @@
 import React from "react";
 import messages_en from "./translations/en.json";
+import messages_fr from "./translations/fr.json";
 import reducer from "./reducer";
 import { LocalOffer, Folder } from "@material-ui/icons";
 import ContributionPlansPage from "./pages/ContributionPlansPage";
@@ -19,6 +20,7 @@ import {
     RIGHT_PAYMENT_PLAN_SEARCH
 } from "./constants";
 import { FormattedMessage } from "@openimis/fe-core";
+import { PaymentPlanTaskTableHeaders, PaymentPlanTaskItemFormatters } from "./components/tasks/PaymentPlanTasks";
 
 const ROUTE_CONTRIBUTION_PLANS = "contributionPlans";
 const ROUTE_CONTRIBUTION_PLAN = "contributionPlans/contributionPlan";
@@ -30,7 +32,10 @@ const ROUTE_PAYMENT_PLAN = "paymentPlans/paymentPlan";
 const ROUTE_PAYMENT_PLAN_REPLACE = "paymentPlans/replacePaymentPlan";
 
 const DEFAULT_CONFIG = {
-    "translations": [{ key: "en", messages: messages_en }],
+    "translations": [
+        { key: "en", messages: messages_en },
+        { key: "fr", messages: messages_fr }
+    ],
     "reducers": [{ key: 'contributionPlan', reducer }],
     "refs": [
         { key: "contributionPlan.route.contributionPlans", ref: ROUTE_CONTRIBUTION_PLANS },
@@ -82,7 +87,15 @@ const DEFAULT_CONFIG = {
             filter: rights => rights.includes(RIGHT_PAYMENT_PLAN_SEARCH),
             id: 'legalAndFinance.paymentPlans'
         }
-    ]
+    ],
+    'tasksManagement.tasks': [
+        {
+            text: <FormattedMessage module="contributionPlan" id="paymentPlan.tasks.title" />,
+            tableHeaders: PaymentPlanTaskTableHeaders,
+            itemFormatters: PaymentPlanTaskItemFormatters,
+            taskSource: ['payment_plan'],
+        },
+    ],
 }
 
 export const ContributionPlanModule = (cfg) => {
