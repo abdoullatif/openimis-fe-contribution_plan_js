@@ -17,26 +17,16 @@ const parseMaybeJson = (value) => {
   return value;
 };
 
-const NESTED_CANDIDATE_KEYS = [
-  'jsonExt',
-  'json_ext',
-  'paymentPlan',
-  'payment_plan',
-  'businessData',
-  'business_data',
-  'current_data',
-  'incoming_data',
-  'data',
-  'payload',
-  'entity',
-  'details',
-];
+const normalizeKey = (key) => (key ? key.toString().replace(/[^a-z0-9]/gi, '').toLowerCase() : '');
 
-const buildCandidates = (source) => {
-  const root = parseMaybeJson(source);
-  const stack = [root];
-  const candidates = [];
+const findDeepValue = (source, keys = []) => {
+  const normalizedTargets = keys.filter(Boolean).map(normalizeKey);
+  if (!normalizedTargets.length) {
+    return null;
+  }
+
   const visited = new Set();
+  const stack = [parseMaybeJson(source)];
 
   while (stack.length) {
     const current = stack.pop();
@@ -47,36 +37,22 @@ const buildCandidates = (source) => {
       continue;
     }
     visited.add(current);
-    candidates.push(current);
 
-    NESTED_CANDIDATE_KEYS.forEach((key) => {
-      if (current[key] !== undefined && current[key] !== null) {
-        stack.push(parseMaybeJson(current[key]));
+    const entries = Array.isArray(current)
+      ? current.map((value, index) => [index, value])
+      : Object.entries(current);
+
+    for (let i = 0; i < entries.length; i += 1) {
+      const [rawKey, rawValue] = entries[i];
+      const key = normalizeKey(rawKey);
+      const value = parseMaybeJson(rawValue);
+
+      if (value !== undefined && value !== null && normalizedTargets.includes(key)) {
+        return value;
       }
-    });
-  }
 
-  return candidates;
-};
-
-const getFirstValue = (source = {}, keys = []) => {
-  const candidates = buildCandidates(source);
-
-  for (let i = 0; i < candidates.length; i += 1) {
-    const candidate = candidates[i];
-    for (let j = 0; j < keys.length; j += 1) {
-      const key = keys[j];
-      if (!key) {
-        continue;
-      }
-      if (candidate?.[key] !== undefined && candidate?.[key] !== null) {
-        return candidate[key];
-      }
-      if (typeof key === 'string' && key.includes('.')) {
-        const nestedValue = key.split('.').reduce((acc, part) => (acc && acc[part] !== undefined ? acc[part] : null), candidate);
-        if (nestedValue !== undefined && nestedValue !== null) {
-          return nestedValue;
-        }
+      if (typeof value === 'object') {
+        stack.push(value);
       }
     }
   }
@@ -119,51 +95,60 @@ const formatDateValue = (value) => {
 };
 
 const PaymentPlanTaskItemFormatters = () => [
-  (itemData = {}) => {
-    const paymentPlan = itemData || {};
+  (itemData = {}, jsonExt = {}, formatterIndex, setAdditionalData, incomingData = {}) => {
+    const paymentPlan = {
+      itemData: parseMaybeJson(itemData),
+      jsonExt: parseMaybeJson(jsonExt),
+      incomingData: parseMaybeJson(incomingData),
+      ...parseMaybeJson(itemData),
+    };
 
     const lines = [
-      formatLine('paymentPlan.code', getFirstValue(paymentPlan, ['code', 'payment_plan_code', 'businessData.current_data.code', 'business_data.current_data.code'])),
-      formatLine('paymentPlan.name', getFirstValue(paymentPlan, ['name', 'payment_plan_name', 'businessData.current_data.name', 'business_data.current_data.name'])),
-      formatLine('paymentPlan.type', getFirstValue(paymentPlan, ['benefitPlanTypeName', 'benefit_plan_type_name', 'businessData.current_data.benefit_plan_type_name', 'business_data.current_data.benefit_plan_type_name'])),
-      formatLine('paymentPlan.benefitPlan', getBenefitPlanDisplay(getFirstValue(paymentPlan, ['benefitPlan', 'benefit_plan', 'businessData.current_data.benefit_plan', 'business_data.current_data.benefit_plan']))),
+      formatLine('paymentPlan.code', findDeepValue(paymentPlan, ['code', 'payment_plan_code'])),
+      formatLine('paymentPlan.name', findDeepValue(paymentPlan, ['name', 'payment_plan_name'])),
+      formatLine('paymentPlan.type', findDeepValue(paymentPlan, ['benefitPlanTypeName', 'benefit_plan_type_name'])),
+      formatLine('paymentPlan.benefitPlan', getBenefitPlanDisplay(findDeepValue(paymentPlan, ['benefitPlan', 'benefit_plan']))),
       formatLine(
         'paymentPlan.calculation',
-        getFirstValue(paymentPlan, ['calculationName', 'calculation_name', 'businessData.current_data.calculation_name', 'business_data.current_data.calculation_name']) ||
-          getFirstValue(paymentPlan, ['calculation', 'calculation_rule_id', 'businessData.current_data.calculation', 'business_data.current_data.calculation']),
+        findDeepValue(paymentPlan, ['calculationName', 'calculation_name']) ||
+          findDeepValue(paymentPlan, ['calculation', 'calculation_rule_id']),
       ),
-      formatLine('paymentPlan.periodicity', getFirstValue(paymentPlan, ['periodicity', 'businessData.current_data.periodicity', 'business_data.current_data.periodicity'])),
+      formatLine('paymentPlan.periodicity', findDeepValue(paymentPlan, ['periodicity'])),
       formatLine(
         'paymentPlan.dateValidFrom',
         formatDateValue(
-          getFirstValue(paymentPlan, [
+          findDeepValue(paymentPlan, [
             'dateValidFrom',
             'date_valid_from',
             'valid_from',
             'validityFrom',
             'validity_from',
             'validFrom',
-            'businessData.current_data.date_valid_from',
-            'business_data.current_data.date_valid_from',
-            'businessData.current_data.valid_from',
-            'business_data.current_data.valid_from',
+            'startDate',
+            'start_date',
+            'dateValidFromDisplay',
+            'date_valid_from_display',
+            'validFromDisplay',
+            'valid_from_display',
           ]),
         ),
       ),
       formatLine(
         'paymentPlan.dateValidTo',
         formatDateValue(
-          getFirstValue(paymentPlan, [
+          findDeepValue(paymentPlan, [
             'dateValidTo',
             'date_valid_to',
             'valid_to',
             'validityTo',
             'validity_to',
             'validTo',
-            'businessData.current_data.date_valid_to',
-            'business_data.current_data.date_valid_to',
-            'businessData.current_data.valid_to',
-            'business_data.current_data.valid_to',
+            'endDate',
+            'end_date',
+            'dateValidToDisplay',
+            'date_valid_to_display',
+            'validToDisplay',
+            'valid_to_display',
           ]),
         ),
       ),
