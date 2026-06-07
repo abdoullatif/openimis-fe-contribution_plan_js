@@ -34,7 +34,10 @@ import {
 import PaymentPlanTypePicker from "../pickers/PaymentPlanTypePicker";
 import { isEmptyObject } from "../utils";
 import AdvancedCriteriaDialog from "../dialogs/AdvancedCriteriaDialog";
-import { CLEARED_STATE_FILTER } from "../constants";
+import {
+    getAdvancedCriteriaList,
+    mergeJsonExtPreservingAdvancedCriteria,
+} from "../utils/advancedCriteriaJsonExt";
 
 const styles = theme => ({
     tableTitle: theme.table.title,
@@ -51,14 +54,35 @@ class PaymentPlanHeadPanel extends FormPanel {
     constructor(props) {
         super(props);
         this.state = {
-          appliedCustomFilters: [CLEARED_STATE_FILTER],
-          appliedFiltersRowStructure: [CLEARED_STATE_FILTER],
+            ...this.state,
+            appliedCustomFilters: [],
+            appliedFiltersRowStructure: [],
         };
+    }
+
+    componentDidMount() {
+        super.componentDidMount();
+        this.syncCriteriaStateFromEdited();
     }
 
     componentDidUpdate(prevProps, prevState, snapshot) {
         super.componentDidUpdate(prevProps, prevState, snapshot);
+        if (prevProps.edited?.jsonExt !== this.props.edited?.jsonExt) {
+            this.syncCriteriaStateFromEdited();
+        }
+        const type = (this.props.edited?.benefitPlanTypeName || '').replace(/\s+/g, '');
+        if (type === PAYMENT_PLAN_TYPE.BENEFIT_PLAN && !this.props.edited?.periodicity) {
+            this.updateAttributes({ periodicity: 1 });
+        }
     }
+
+    syncCriteriaStateFromEdited = () => {
+        const filters = this.getDefaultAppliedCustomFilters();
+        this.setState({
+            appliedCustomFilters: filters,
+            appliedFiltersRowStructure: filters,
+        });
+    };
 
     shouldValidate = (input) => {
         const { savedCode } = this.props;
@@ -66,15 +90,37 @@ class PaymentPlanHeadPanel extends FormPanel {
     };
 
     updateTypeOfPaymentPlan = (field, value) => {
-        this.updateAttributes({
-            "benefitPlan": null, [field]: value, "calculation": null
-        })
+        const normalizedType = (value || '').replace(/\s+/g, '');
+        const updates = {
+            benefitPlan: null,
+            [field]: value,
+            calculation: null,
+        };
+        if (normalizedType === PAYMENT_PLAN_TYPE.BENEFIT_PLAN) {
+            updates.periodicity = 1;
+        }
+        this.updateAttributes(updates);
     };
 
     updateJsonExt = (value) => {
         this.updateAttributes({
-            "jsonExt": value
-        })
+            jsonExt: value,
+        });
+    };
+
+    updateAttribute = (attr, v) => {
+        if (attr === "jsonExt") {
+            const merged = mergeJsonExtPreservingAdvancedCriteria(this.props.edited?.jsonExt, v);
+            return this.updateAttributes({ jsonExt: merged });
+        }
+        return this.updateAttributes({ [attr]: v });
+    };
+
+    updateAttributes = (updates) => {
+        const base = this.state.data ?? this.props.edited ?? {};
+        const data = { ...base, ...updates };
+        this.setState({ data });
+        this.props.onEditedChanged(data);
     };
 
     onChangeFilters = (fltrs) => {
@@ -89,41 +135,55 @@ class PaymentPlanHeadPanel extends FormPanel {
         this.setState({ filters }, (e) => this.applyFilters());
     };
 
-    getDefaultAppliedCustomFilters = () => {
-        const { jsonExt } = this.props.edited;
-        try {
-          const jsonData = JSON.parse(jsonExt);
-          const advancedCriteria = jsonData.advanced_criteria || [];
-          console.log("advancedCriteria", advancedCriteria);
-
-          return advancedCriteria.map(
-            ({ amount, type, field, value, referential, typeLocation, custom_filter_condition }) => {
+    getDefaultAppliedCustomFilters = (jsonExt = this.props.edited?.jsonExt) => {
+        const advancedCriteria = getAdvancedCriteriaList(jsonExt);
+        return advancedCriteria.map(
+            ({
+              amount,
+              type,
+              field,
+              value,
+              referential,
+              typeLocation,
+              custom_filter_condition,
+              filter: savedFilter,
+            }) => {
               let parsedValue = value;
               try {
-                // Reconvertir les chaînes JSON en objets si possible (ex: Location)
-                if (typeof value === "string" && value.startsWith("{") && value.endsWith("}")) {
+                if (typeof value === "string" && value.trim().startsWith("{")) {
                   parsedValue = JSON.parse(value);
                 }
               } catch (err) {
                 parsedValue = value;
               }
 
+              const filterFromCondition = (() => {
+                if (!custom_filter_condition || !custom_filter_condition.includes("=")) {
+                  return "";
+                }
+                const fieldPart = custom_filter_condition.split("=", 1)[0];
+                const parts = fieldPart.split("__");
+                if (parts.length >= 3) {
+                  return parts[1];
+                }
+                if (parts.length === 2) {
+                  return parts[1];
+                }
+                return "";
+              })();
+
               return {
-                amount,
+                amount: amount ?? "",
                 custom_filter_condition,
-                field,
-                filter: custom_filter_condition?.split("__")?.[1] || "",
-                type,
-                referential,
-                typeLocation,
-                value: parsedValue,
+                field: field ?? "",
+                filter: savedFilter || filterFromCondition || "",
+                type: type ?? "",
+                referential: referential ?? "",
+                typeLocation: typeLocation ?? "",
+                value: parsedValue ?? "",
               };
-            }
-          );
-        } catch (error) {
-          console.error("Erreur parsing advanced_criteria :", error);
-          return [];
-        }
+            },
+        );
       };
 
     setAppliedCustomFilters = (appliedCustomFilters) => {
@@ -153,16 +213,16 @@ class PaymentPlanHeadPanel extends FormPanel {
         const paymentPlanType = paymentPlan?.benefitPlanTypeName;
         const { appliedCustomFilters, appliedFiltersRowStructure } = this.state;
 
-        const isBenefitPlanType = () => paymentPlanType.replace(/\s+/g, '') === PAYMENT_PLAN_TYPE.BENEFIT_PLAN;
+        const normalizedPlanType = () => (paymentPlanType || '').replace(/\s+/g, '');
+        const isBenefitPlanType = () => normalizedPlanType() === PAYMENT_PLAN_TYPE.BENEFIT_PLAN;
 
         if (paymentPlanType) {
             // probably could get rid of that if we use double JSON.parse in reducer
             const objectBenefitPlan = typeof paymentPlan.productOrBenefitPlan === 'object' ?
               paymentPlan.productOrBenefitPlan : JSON.parse(paymentPlan.productOrBenefitPlan || '{}');
             paymentPlan.benefitPlan = objectBenefitPlan;
-            if (paymentPlanType === 'benefitplan' || paymentPlanType === 'benefit plan') {
+            if (isBenefitPlanType() && !paymentPlan.periodicity) {
                 paymentPlan.periodicity = 1;
-                this.state.data.periodicity = paymentPlan.periodicity;
             }
             return (
                 <Fragment>
@@ -287,23 +347,23 @@ class PaymentPlanHeadPanel extends FormPanel {
                                 type='EVERY_TYPE'
                             />
                         </Grid>
-                        {paymentPlanType !== 'benefitplan' && paymentPlanType !== 'benefit plan' && (
-                            <Grid item xs={GRID_ITEM_SIZE} className={classes.item}>
-                                <NumberInput
-                                    module="contributionPlan"
-                                    readOnly={readOnly}
-                                    label="periodicity"
-                                    required
-                                    /**
-                                    * @see min set to @see EMPTY_PERIODICITY_FILTER when filter unset to avoid @see NumberInput error message
-                                    */
-                                    min={!!paymentPlan.periodicity ? MIN_PERIODICITY_VALUE : EMPTY_PERIODICITY_VALUE}
-                                    max={MAX_PERIODICITY_VALUE}
-                                    value={!!paymentPlan.periodicity ? paymentPlan.periodicity : null}
-                                    onChange={(v) => this.updateAttribute("periodicity", v)}
-                                />
-                            </Grid>
-                        )}
+                        <Grid item xs={GRID_ITEM_SIZE} className={classes.item}>
+                            <NumberInput
+                                module="contributionPlan"
+                                readOnly={readOnly}
+                                label="periodicity"
+                                required={!isBenefitPlanType()}
+                                min={!!paymentPlan.periodicity ? MIN_PERIODICITY_VALUE : EMPTY_PERIODICITY_VALUE}
+                                max={MAX_PERIODICITY_VALUE}
+                                value={!!paymentPlan.periodicity ? paymentPlan.periodicity : null}
+                                onChange={(v) => this.updateAttribute("periodicity", v)}
+                            />
+                            {isBenefitPlanType() && (
+                                <Typography variant="caption" color="textSecondary" display="block">
+                                    {formatMessage(intl, "paymentPlan", "periodicity.benefitPlanHint")}
+                                </Typography>
+                            )}
+                        </Grid>
                         <Grid item xs={GRID_ITEM_SIZE} className={classes.item}>
                             <PublishedComponent
                                 pubRef="core.DatePicker"
@@ -379,8 +439,9 @@ class PaymentPlanHeadPanel extends FormPanel {
                                         appliedFiltersRowStructure={appliedFiltersRowStructure}
                                         setAppliedFiltersRowStructure={this.setAppliedFiltersRowStructure}
                                         updateAttributes={this.updateJsonExt}
-                                        getDefaultAppliedCustomFilters={this.getDefaultAppliedCustomFilters}
-                                        edited={this.props.edited}
+                                        getDefaultAppliedCustomFilters={(jsonExt) =>
+                                            this.getDefaultAppliedCustomFilters(jsonExt ?? paymentPlan.jsonExt)
+                                        }
                                         readOnly={readOnly}
                                         />
 

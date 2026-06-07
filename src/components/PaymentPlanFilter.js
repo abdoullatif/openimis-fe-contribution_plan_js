@@ -7,11 +7,11 @@ import { withTheme, withStyles } from "@material-ui/core/styles";
 import {
   withModulesManager,
   formatMessage,
-  TextInput,
   NumberInput,
   PublishedComponent,
   Contributions,
 } from "@openimis/fe-core";
+import PaymentPlanFilterSuggestionField from "./PaymentPlanFilterSuggestionField";
 import {
   DATE_TO_DATETIME_SUFFIX,
   GREATER_OR_EQUAL_LOOKUP,
@@ -98,23 +98,19 @@ class PaymentPlanFilter extends Component {
     return (
       <Grid container className={classes.form}>
         <Grid item xs={2} className={classes.item}>
-          <TextInput
-            module="contributionPlan"
-            label="code"
+          <PaymentPlanFilterSuggestionField
+            field="code"
+            labelKey="code"
             value={this._filterTextFieldValue("code")}
-            onChange={(v) =>
-              this._onChangeStringFilter("code", v, CONTAINS_LOOKUP)
-            }
+            onApplyFilter={(k, v, lookup) => this._onChangeStringFilter(k, v, lookup)}
           />
         </Grid>
         <Grid item xs={2} className={classes.item}>
-          <TextInput
-            module="contributionPlan"
-            label="name"
+          <PaymentPlanFilterSuggestionField
+            field="name"
+            labelKey="name"
             value={this._filterTextFieldValue("name")}
-            onChange={(v) =>
-              this._onChangeStringFilter("name", v, CONTAINS_LOOKUP)
-            }
+            onApplyFilter={(k, v, lookup) => this._onChangeStringFilter(k, v, lookup)}
           />
         </Grid>
         <Grid item xs={3} className={classes.item}>
@@ -213,6 +209,21 @@ class PaymentPlanFilter extends Component {
               />
             }
             label={formatMessage(intl, "contributionPlan", "showHistory")}
+          />
+        </Grid>
+        <Grid item xs={2} className={classes.item}>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={this._filterValue("applyDefaultValidityFilter") === false}
+                onChange={(event) => {
+                  const showExpired = event.target.checked;
+                  this._onChangeFilter("applyDefaultValidityFilter", !showExpired);
+                }}
+                name="applyDefaultValidityFilter"
+              />
+            }
+            label={formatMessage(intl, "paymentPlan", "showExpired")}
           />
         </Grid>
       </Grid>

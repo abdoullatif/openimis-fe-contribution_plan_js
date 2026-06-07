@@ -13,6 +13,7 @@ import {
   useTranslations,
   CustomFilterTypeStatusPicker,
   CustomFilterFieldStatusPicker,
+  CustomFilterValueSuggestionsInput,
 } from "@openimis/fe-core";
 import { Grid } from "@material-ui/core";
 import { withTheme, withStyles } from "@material-ui/core/styles";
@@ -30,6 +31,13 @@ const styles = (theme) => ({
   item: theme.paper.item,
 });
 
+function shouldUseCustomFilterValueSuggestions(filter) {
+  if (!filter?.field) return false;
+  if (filter.referential || filter.typeLocation) return false;
+  if (filter.type === BOOLEAN) return false;
+  return true;
+}
+
 const AdvancedCriteriaRowValue = ({
   intl,
   classes,
@@ -40,28 +48,43 @@ const AdvancedCriteriaRowValue = ({
   filters,
   setFilters,
   readOnly,
+  benefitPlanId = null,
 }) => {
   const modulesManager = useModulesManager();
   const { formatMessage } = useTranslations("paymentPlan", modulesManager);
 
   /** Met à jour dynamiquement le filtre selon le champ modifié */
-  const onAttributeChange = (attribute) => (value) => {
-    const updatedFilter = {
-      ...currentFilter,
-      [attribute]: attribute === "field" ? value.field : value,
-      ...(attribute === "field" && {
-        type: value.type,
-        referential: value.referential,
-        typeLocation: value.typeLocation,
-        filter: "",
-        value: "",
-        amount: "",
-      }),
-      ...(attribute === "filter" && { value: "" }),
-    };
+  const onAttributeChange = (attribute) => (incoming) => {
+    setFilters((prev) => {
+      const next = [...prev];
+      const row = { ...(next[index] ?? {}) };
 
-    setCurrentFilter(updatedFilter);
-    setFilters((prev) => prev.map((f, i) => (i === index ? updatedFilter : f)));
+      if (attribute === 'field') {
+        next[index] = {
+          ...row,
+          field: incoming.field,
+          type: incoming.type,
+          referential: incoming.referential,
+          typeLocation: incoming.typeLocation,
+          filter: '',
+          value: '',
+          amount: '',
+        };
+      } else if (attribute === 'filter') {
+        next[index] = {
+          ...row,
+          filter: incoming,
+        };
+      } else {
+        next[index] = {
+          ...row,
+          [attribute]: incoming,
+        };
+      }
+
+      setCurrentFilter(next[index]);
+      return next;
+    });
   };
 
   /** Supprime une ligne de critère */
@@ -106,6 +129,22 @@ const AdvancedCriteriaRowValue = ({
             />
           );
         case INTEGER:
+          if (shouldUseCustomFilterValueSuggestions(currentFilter) && benefitPlanId) {
+            return (
+              <CustomFilterValueSuggestionsInput
+                key={`${currentFilter.field}-${benefitPlanId}`}
+                label={commonProps.label}
+                value={currentFilter.value}
+                onChange={onAttributeChange("value")}
+                readOnly={readOnly}
+                field={currentFilter.field}
+                moduleName="payroll"
+                objectTypeName="BenefitPlan"
+                uuidOfObject={benefitPlanId}
+                minLength={1}
+              />
+            );
+          }
           return (
             <NumberInput
               min={0}
@@ -122,6 +161,22 @@ const AdvancedCriteriaRowValue = ({
                 pubRef="core.DatePicker"
                 readOnly={readOnly}
                 {...commonProps}
+              />
+            );
+          }
+          if (shouldUseCustomFilterValueSuggestions(currentFilter) && benefitPlanId) {
+            return (
+              <CustomFilterValueSuggestionsInput
+                key={`${currentFilter.field}-${benefitPlanId}`}
+                label={commonProps.label}
+                value={currentFilter.value}
+                onChange={onAttributeChange("value")}
+                readOnly={readOnly}
+                field={currentFilter.field}
+                moduleName="payroll"
+                objectTypeName="BenefitPlan"
+                uuidOfObject={benefitPlanId}
+                minLength={1}
               />
             );
           }

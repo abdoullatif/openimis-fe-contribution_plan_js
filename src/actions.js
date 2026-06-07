@@ -9,6 +9,7 @@ import {
 } from "@openimis/fe-core";
 import { isBase64Encoded } from "./utils";
 import { PAYMENT_PLAN_TYPE } from "./constants";
+import { formatJsonExtForGQL } from "./utils/advancedCriteriaJsonExt";
 
 const CONTRIBUTIONPLAN_FULL_PROJECTION = (modulesManager) => [
   "id",
@@ -342,11 +343,7 @@ function formatPaymentPlanGQL(paymentPlan, isReplaceMutation = false) {
             ? `calculation: "${paymentPlan.calculation}"`
             : ""
         }
-        ${
-          !!paymentPlan.jsonExt
-            ? `jsonExt: ${JSON.stringify(paymentPlan.jsonExt)}`
-            : ""
-        }
+        ${formatJsonExtForGQL(paymentPlan.jsonExt)}
         ${
           !!paymentPlan.benefitPlanTypeName
             ? `benefitPlanType_Model: "${formatGQLString(paymentPlan.benefitPlanTypeName.replace(/\s+/g, ''))}"`
@@ -838,4 +835,27 @@ export const contributionPlanBundleCodeClear = () => {
     dispatch({ type: "CONTRIBUTIONPLAN_BUNDLE_CODE_FIELDS_VALIDATION_CLEAR" });
   };
 };
+
+export function fetchPaymentPlanFilterSuggestions(search, field = "code") {
+  const lookupKey = field === "name" ? "name_Icontains" : "code_Icontains";
+  const payload = formatPageQuery(
+    "paymentPlan",
+    [
+      "first: 15",
+      "isDeleted: false",
+      `${lookupKey}: "${formatGQLString(search)}"`,
+    ],
+    ["id", "code", "name"],
+  );
+  return (dispatch) => graphql(payload, "PAYMENTPLAN_FILTER_SUGGESTIONS")(
+    dispatch,
+  ).then((action) => {
+    if (action?.error || action?.payload?.errors) return [];
+    const edges = action?.payload?.data?.paymentPlan?.edges ?? [];
+    return edges.map(({ node }) => ({
+      label: field === "name" ? node.name : node.code,
+      value: field === "name" ? node.name : node.code,
+    }));
+  });
+}
 

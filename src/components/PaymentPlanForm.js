@@ -13,8 +13,11 @@ import { withTheme, withStyles } from "@material-ui/core/styles";
 import { bindActionCreators } from "redux";
 import { connect } from "react-redux";
 import PaymentPlanHeadPanel from "./PaymentPlanHeadPanel";
+import PaymentPlanSaveProgressDialog from "./PaymentPlanSaveProgressDialog";
 import { fetchPaymentPlan, clearPaymentPlan } from "../actions";
-import { MAX_PERIODICITY_VALUE, MIN_PERIODICITY_VALUE } from "../constants";
+import { MAX_PERIODICITY_VALUE, MIN_PERIODICITY_VALUE, PAYMENT_PLAN_TYPE } from "../constants";
+import { isEmptyObject } from "../utils";
+import { parseJsonExt } from "../utils/advancedCriteriaJsonExt";
 import _ from "lodash";
 
 const styles = theme => ({
@@ -61,15 +64,21 @@ class PaymentPlanForm extends Component {
         }
     }
 
+    isBenefitPlanType = (paymentPlan) => (
+        (paymentPlan?.benefitPlanTypeName || '').replace(/\s+/g, '') === PAYMENT_PLAN_TYPE.BENEFIT_PLAN
+    );
+
     isMandatoryFieldsEmpty = () => {
         const { paymentPlan } = this.state;
+        const benefitPlanOk = !!paymentPlan.benefitPlan && !isEmptyObject(paymentPlan.benefitPlan);
+        const periodicityOk = !!paymentPlan.periodicity;
         if (
             !!paymentPlan.code &&
             !!paymentPlan.name &&
             !!paymentPlan.benefitPlanTypeName &&
             !!paymentPlan.calculation &&
-            !!paymentPlan.benefitPlan &&
-            !!paymentPlan.periodicity &&
+            benefitPlanOk &&
+            periodicityOk &&
             !!paymentPlan.dateValidFrom
         ) {
             return false;
@@ -78,25 +87,38 @@ class PaymentPlanForm extends Component {
     }
 
     isPeriodicityValid = () => {
-        let periodicityInt = parseInt(this.state.paymentPlan.periodicity);
-        return !!periodicityInt ? periodicityInt >= MIN_PERIODICITY_VALUE && periodicityInt <= MAX_PERIODICITY_VALUE : false;
+        const { paymentPlan } = this.state;
+        if (!paymentPlan.periodicity && this.isBenefitPlanType(paymentPlan)) {
+            return true;
+        }
+        const periodicityInt = parseInt(paymentPlan.periodicity, 10);
+        return !!periodicityInt
+            && periodicityInt >= MIN_PERIODICITY_VALUE
+            && periodicityInt <= MAX_PERIODICITY_VALUE;
     }
 
     doesPaymentPlanChange = () => {
-        const { paymentPlan } = this.props;
-        if (_.isEqual(paymentPlan, this.state.paymentPlan)) {
-          return false;
+        if (!this.props.paymentPlanId) {
+            return !_.isEmpty(this.state.paymentPlan);
         }
-        return true;
-      };
+        const { paymentPlan } = this.props;
+        return !_.isEqual(paymentPlan, this.state.paymentPlan);
+    };
 
-    canSave = () =>  
+    canSave = () =>
         !this.isMandatoryFieldsEmpty() &&
         this.isPeriodicityValid() &&
         !!this.state.jsonExtValid &&
         this.doesPaymentPlanChange();
 
-    save = paymentPlan => this.props.save(paymentPlan);
+    save = (paymentPlan) => {
+        const normalized = { ...paymentPlan };
+        const parsedJsonExt = parseJsonExt(normalized.jsonExt);
+        if (Object.keys(parsedJsonExt).length > 0) {
+            normalized.jsonExt = JSON.stringify(parsedJsonExt);
+        }
+        this.props.save(normalized);
+    };
 
     onEditedChanged = paymentPlan => this.setState({ paymentPlan })
 
@@ -115,9 +137,11 @@ class PaymentPlanForm extends Component {
           classes,
         } = this.props;
         const shouldBeLocked = Boolean(this.state.clientMutationId);
+        const showSaveProgress = this.props.submittingMutation;
         return (
             <div className={shouldBeLocked ? classes.lockedPage : null}>
                 <Helmet title={formatMessageWithValues(this.props.intl, "paymentPlan", "paymentPlan.page.title", this.titleParams())} />
+                <PaymentPlanSaveProgressDialog open={showSaveProgress} />
                 <Form
                     module="paymentPlan"
                     title="paymentPlan.page.title"
@@ -136,6 +160,7 @@ class PaymentPlanForm extends Component {
                     isReplacing={isReplacing}
                     openDirty={save}
                     readOnly={shouldBeLocked}
+                    update={this.props.submittingMutation}
                 />
             </div>
         )
