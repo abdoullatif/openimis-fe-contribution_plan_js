@@ -13,7 +13,8 @@ import {
   useTranslations,
   CustomFilterTypeStatusPicker,
   CustomFilterFieldStatusPicker,
-  CustomFilterValueSuggestionsInput,
+  CustomFilterFieldValueInput,
+  shouldUseCustomFilterValueSuggestions,
 } from "@openimis/fe-core";
 import { Grid } from "@material-ui/core";
 import { withTheme, withStyles } from "@material-ui/core/styles";
@@ -31,12 +32,8 @@ const styles = (theme) => ({
   item: theme.paper.item,
 });
 
-function shouldUseCustomFilterValueSuggestions(filter) {
-  if (!filter?.field) return false;
-  if (filter.referential || filter.typeLocation) return false;
-  if (filter.type === BOOLEAN) return false;
-  return true;
-}
+const CUSTOM_FILTER_MODULE_NAME = "social_protection";
+const CUSTOM_FILTER_OBJECT_TYPE = "BenefitPlan";
 
 const AdvancedCriteriaRowValue = ({
   intl,
@@ -53,7 +50,6 @@ const AdvancedCriteriaRowValue = ({
   const modulesManager = useModulesManager();
   const { formatMessage } = useTranslations("paymentPlan", modulesManager);
 
-  /** Met à jour dynamiquement le filtre selon le champ modifié */
   const onAttributeChange = (attribute) => (incoming) => {
     setFilters((prev) => {
       const next = [...prev];
@@ -87,14 +83,12 @@ const AdvancedCriteriaRowValue = ({
     });
   };
 
-  /** Supprime une ligne de critère */
   const removeFilter = () => {
     const newArray = [...filters];
     newArray.splice(index, 1);
     setFilters(newArray.length === 0 ? [CLEARED_STATE_FILTER] : newArray);
   };
 
-  /** Rendu des composants selon le type du champ */
   const renderInputBasedOnType = useMemo(
     () => (type) => {
       const commonProps = {
@@ -103,21 +97,6 @@ const AdvancedCriteriaRowValue = ({
         value: currentFilter.value,
         onChange: onAttributeChange("value"),
       };
-
-      // Cas spécial pour les localités
-      if (currentFilter.referential === "Location") {
-        const levels = { Region: 0, District: 1, Municipality: 2, Village: 3 };
-        const level = levels[currentFilter.typeLocation];
-        if (level === undefined) return null;
-
-        return (
-          <PublishedComponent
-            pubRef="location.LocationPicker"
-            {...commonProps}
-            locationLevel={level}
-          />
-        );
-      }
 
       switch (type) {
         case BOOLEAN:
@@ -131,15 +110,16 @@ const AdvancedCriteriaRowValue = ({
         case INTEGER:
           if (shouldUseCustomFilterValueSuggestions(currentFilter) && benefitPlanId) {
             return (
-              <CustomFilterValueSuggestionsInput
+              <CustomFilterFieldValueInput
                 key={`${currentFilter.field}-${benefitPlanId}`}
                 label={commonProps.label}
                 value={currentFilter.value}
                 onChange={onAttributeChange("value")}
                 readOnly={readOnly}
                 field={currentFilter.field}
-                moduleName="payroll"
-                objectTypeName="BenefitPlan"
+                filterMeta={currentFilter}
+                moduleName={CUSTOM_FILTER_MODULE_NAME}
+                objectTypeName={CUSTOM_FILTER_OBJECT_TYPE}
                 uuidOfObject={benefitPlanId}
                 minLength={1}
               />
@@ -166,15 +146,16 @@ const AdvancedCriteriaRowValue = ({
           }
           if (shouldUseCustomFilterValueSuggestions(currentFilter) && benefitPlanId) {
             return (
-              <CustomFilterValueSuggestionsInput
+              <CustomFilterFieldValueInput
                 key={`${currentFilter.field}-${benefitPlanId}`}
                 label={commonProps.label}
                 value={currentFilter.value}
                 onChange={onAttributeChange("value")}
                 readOnly={readOnly}
                 field={currentFilter.field}
-                moduleName="payroll"
-                objectTypeName="BenefitPlan"
+                filterMeta={currentFilter}
+                moduleName={CUSTOM_FILTER_MODULE_NAME}
+                objectTypeName={CUSTOM_FILTER_OBJECT_TYPE}
                 uuidOfObject={benefitPlanId}
                 minLength={1}
               />
@@ -183,7 +164,7 @@ const AdvancedCriteriaRowValue = ({
           return <TextInput readOnly={readOnly} {...commonProps} />;
       }
     },
-    [currentFilter, readOnly, formatMessage]
+    [currentFilter, readOnly, formatMessage, benefitPlanId]
   );
 
   return (
@@ -193,7 +174,6 @@ const AdvancedCriteriaRowValue = ({
       className={classes.item}
       style={{ backgroundColor: "#DFEDEF" }}
     >
-      {/* Bouton de suppression */}
       {filters.length > 0 && !readOnly && (
         <div
           style={{
@@ -217,7 +197,6 @@ const AdvancedCriteriaRowValue = ({
         </div>
       )}
 
-      {/* Sélecteur du champ */}
       <Grid item xs={3} className={classes.item}>
         <CustomFilterFieldStatusPicker
           module="paymentPlan"
@@ -234,7 +213,6 @@ const AdvancedCriteriaRowValue = ({
         />
       </Grid>
 
-      {/* Sélecteur du type de filtre */}
       {currentFilter.field && (
         <Grid item xs={3} className={classes.item}>
           <CustomFilterTypeStatusPicker
@@ -249,14 +227,12 @@ const AdvancedCriteriaRowValue = ({
         </Grid>
       )}
 
-      {/* Valeur du filtre */}
       {currentFilter.field && currentFilter.filter && (
         <Grid item xs={3} className={classes.item}>
           {renderInputBasedOnType(currentFilter.type)}
         </Grid>
       )}
 
-      {/* Montant */}
       {currentFilter.field && currentFilter.filter && currentFilter.value && (
         <Grid item xs={2} className={classes.item}>
           <NumberInput

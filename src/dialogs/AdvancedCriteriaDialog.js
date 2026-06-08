@@ -30,6 +30,19 @@ const normalizeFilterValue = (value) => {
   return String(value);
 };
 
+const serializeCriteriaValue = (value) => {
+  if (value === null || value === undefined || value === "") return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "object" && value.name) {
+    return {
+      name: value.name,
+      ...(value.code ? { code: value.code } : {}),
+      ...(value.uuid ? { uuid: value.uuid } : {}),
+    };
+  }
+  return normalizeFilterValue(value);
+};
+
 const buildCustomFilterCondition = ({ field, filter, value, type }) => {
   if (!field || !filter) return null;
   const normalizedValue = normalizeFilterValue(value);
@@ -51,9 +64,7 @@ const buildSavedCriteriaRows = (filters) => {
       typeLocation,
       filter,
       field,
-      value: typeof value === 'object' && value !== null
-        ? (value.name || value.code || value.id || JSON.stringify(value))
-        : value,
+      value: serializeCriteriaValue(value),
       custom_filter_condition: buildCustomFilterCondition({ field, filter, value, type }),
     }))
     .filter((entry) => !!entry.custom_filter_condition);
