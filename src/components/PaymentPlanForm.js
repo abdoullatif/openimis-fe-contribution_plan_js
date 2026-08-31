@@ -37,6 +37,7 @@ class PaymentPlanForm extends Component {
             requiredValid: false,
             clientMutationId: null,
         };
+        this.headPanelInstance = null;
     }
 
     componentDidMount() {
@@ -112,11 +113,17 @@ class PaymentPlanForm extends Component {
         this.doesPaymentPlanChange();
 
     save = (paymentPlan) => {
-        const normalized = { ...paymentPlan };
+        let normalized = paymentPlan;
+        const flushCriteria = this.headPanelInstance?.flushAdvancedCriteria;
+        if (typeof flushCriteria === 'function') {
+            normalized = flushCriteria(paymentPlan) || paymentPlan;
+        }
+        normalized = { ...normalized };
         const parsedJsonExt = parseJsonExt(normalized.jsonExt);
         if (Object.keys(parsedJsonExt).length > 0) {
             normalized.jsonExt = JSON.stringify(parsedJsonExt);
         }
+        this.setState({ paymentPlan: normalized });
         this.props.save(normalized);
     };
 
@@ -152,6 +159,7 @@ class PaymentPlanForm extends Component {
                     save={this.save}
                     onEditedChanged={this.onEditedChanged}
                     HeadPanel={PaymentPlanHeadPanel}
+                    headPanelRef={(instance) => { this.headPanelInstance = instance; }}
                     mandatoryFieldsEmpty={this.isMandatoryFieldsEmpty()}
                     saveTooltip={formatMessage(intl, "paymentPlan", `saveButton.tooltip.${this.canSave() ? 'enabled' : 'disabled'}`)}
                     setJsonExtValid={this.setJsonExtValid}

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { injectIntl } from "react-intl";
 import Button from "@material-ui/core/Button";
 import {
@@ -12,65 +12,30 @@ import { bindActionCreators } from "redux";
 import AdvancedCriteriaRowValue from "./AdvancedCriteriaRowValue";
 import AddCircle from '@material-ui/icons/Add';
 import { BENEFIT_PLAN, CLEARED_STATE_FILTER } from "../constants";
-import { isBase64Encoded, isEmptyObject } from "../utils";
+import { isEmptyObject } from "../utils";
 import {
+  applyCriteriaRowsToPaymentPlan,
+  buildSavedCriteriaRows,
+  criteriaRowsEqual,
   getAdvancedCriteriaList,
   mergeAdvancedCriteriaIntoJsonExt,
+  mergeSavedAndDraftCriteriaRows,
 } from "../utils/advancedCriteriaJsonExt";
 
 const styles = (theme) => ({
   item: theme.paper.item,
 });
 
-const normalizeFilterValue = (value) => {
-  if (!value) return "";
-  if (typeof value === "object") {
-    return value.name || value.code || value.id || value.value || "";
+const resolveBenefitPlanObjectId = (benefitPlan) => {
+  if (!benefitPlan?.id) return null;
+  const { id } = benefitPlan;
+  if (/^\d+$/.test(id)) return id;
+  try {
+    return decodeId(id);
+  } catch {
+    return id;
   }
-  return String(value);
 };
-
-const serializeCriteriaValue = (value) => {
-  if (value === null || value === undefined || value === "") return "";
-  if (typeof value === "string") return value;
-  if (typeof value === "object" && value.name) {
-    return {
-      name: value.name,
-      ...(value.code ? { code: value.code } : {}),
-      ...(value.uuid ? { uuid: value.uuid } : {}),
-    };
-  }
-  return normalizeFilterValue(value);
-};
-
-const buildCustomFilterCondition = ({ field, filter, value, type }) => {
-  if (!field || !filter) return null;
-  const normalizedValue = normalizeFilterValue(value);
-  if (!normalizedValue) return null;
-  const valueType = type || 'string';
-  return `${field}__${filter}__${valueType}=${normalizedValue}`;
-};
-
-const buildSavedCriteriaRows = (filters) => {
-  const activeFilters = filters.filter(
-    ({ field, filter, value }) => field && filter && normalizeFilterValue(value) !== '',
-  );
-
-  return activeFilters
-    .map(({ filter, value, field, type, referential, typeLocation, amount }) => ({
-      amount,
-      type,
-      referential,
-      typeLocation,
-      filter,
-      field,
-      value: serializeCriteriaValue(value),
-      custom_filter_condition: buildCustomFilterCondition({ field, filter, value, type }),
-    }))
-    .filter((entry) => !!entry.custom_filter_condition);
-};
-
-const criteriaRowsEqual = (left, right) => JSON.stringify(left) === JSON.stringify(right);
 
 const AdvancedCriteriaDialog = ({
   intl,
@@ -88,20 +53,43 @@ const AdvancedCriteriaDialog = ({
   additionalParams,
   confirmed,
   readOnly = false,
+  registerCriteriaFlush,
 }) => {
   const [currentFilter, setCurrentFilter] = useState({
     field: "", filter: "", type: "", value: "", amount: "", referential: null, typeLocation: null,
   });
   const [filters, setFilters] = useState(() => getDefaultAppliedCustomFilters());
   const skipNextSyncRef = useRef(false);
+  const pendingJsonExtSyncRef = useRef(false);
+  const filtersRef = useRef(filters);
+  const objectToSaveRef = useRef(objectToSave);
+
+  filtersRef.current = filters;
+  objectToSaveRef.current = objectToSave;
 
   useEffect(() => {
+    if (!registerCriteriaFlush) {
+      return undefined;
+    }
+
+    registerCriteriaFlush((paymentPlan) => (
+      applyCriteriaRowsToPaymentPlan(paymentPlan ?? objectToSaveRef.current, filtersRef.current)
+    ));
+
+    return () => registerCriteriaFlush(null);
+  }, [registerCriteriaFlush, filters, objectToSave?.jsonExt]);
+
+  useEffect(() => {
+    if (pendingJsonExtSyncRef.current) {
+      pendingJsonExtSyncRef.current = false;
+      return;
+    }
     const parsed = getDefaultAppliedCustomFilters(objectToSave?.jsonExt);
     skipNextSyncRef.current = true;
-    setFilters(parsed.length > 0 ? parsed : []);
+    setFilters((current) => mergeSavedAndDraftCriteriaRows(parsed, current));
   }, [objectToSave?.jsonExt]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (skipNextSyncRef.current) {
       skipNextSyncRef.current = false;
       return;
@@ -117,6 +105,7 @@ const AdvancedCriteriaDialog = ({
     }
 
     const jsonExt = mergeAdvancedCriteriaIntoJsonExt(objectToSave?.jsonExt, savedRows);
+    pendingJsonExtSyncRef.current = true;
     updateAttributes(jsonExt);
     setAppliedFiltersRowStructure(savedRows);
     setAppliedCustomFilters(JSON.stringify(savedRows));
@@ -159,7 +148,7 @@ const AdvancedCriteriaDialog = ({
         paramsToFetchFilters = createParams(
           moduleName,
           objectType,
-          isBase64Encoded(object.id) ? decodeId(object.id) : object.id,
+          resolveBenefitPlanObjectId(object),
           additionalParams,
         );
       } else {
@@ -173,9 +162,7 @@ const AdvancedCriteriaDialog = ({
     }
   }, [object]);
 
-  const benefitPlanId = object?.id
-    ? (isBase64Encoded(object.id) ? decodeId(object.id) : object.id)
-    : null;
+  const benefitPlanId = resolveBenefitPlanObjectId(object);
 
   return (
     <>
@@ -219,16 +206,18 @@ const AdvancedCriteriaDialog = ({
         </div>
       ) : null}
       <div>
-        <div style={{ float: 'left' }}>
-          <Button
-            onClick={handleRemoveFilter}
-            variant="outlined"
-            style={{ border: '0px' }}
-            disabled={confirmed || readOnly}
-          >
-            {formatMessage(intl, 'individual', 'paymentPlan.advancedCriteria.button.clearAllFilters')}
-          </Button>
-        </div>
+        {filters.length > 0 && (
+          <div style={{ float: 'left' }}>
+            <Button
+              onClick={handleRemoveFilter}
+              variant="outlined"
+              style={{ border: '0px' }}
+              disabled={confirmed || readOnly}
+            >
+              {formatMessage(intl, 'individual', 'paymentPlan.advancedCriteria.button.clearAllFilters')}
+            </Button>
+          </div>
+        )}
       </div>
     </>
   );

@@ -70,6 +70,8 @@ const AdvancedCriteriaRowValue = ({
         next[index] = {
           ...row,
           filter: incoming,
+          value: '',
+          amount: '',
         };
       } else {
         next[index] = {
@@ -86,7 +88,7 @@ const AdvancedCriteriaRowValue = ({
   const removeFilter = () => {
     const newArray = [...filters];
     newArray.splice(index, 1);
-    setFilters(newArray.length === 0 ? [CLEARED_STATE_FILTER] : newArray);
+    setFilters(newArray.length === 0 ? [] : newArray);
   };
 
   const renderInputBasedOnType = useMemo(
@@ -98,71 +100,56 @@ const AdvancedCriteriaRowValue = ({
         onChange: onAttributeChange("value"),
       };
 
-      switch (type) {
-        case BOOLEAN:
-          return (
-            <SelectInput
-              options={BOOL_OPTIONS}
-              readOnly={readOnly}
-              {...commonProps}
-            />
-          );
-        case INTEGER:
-          if (shouldUseCustomFilterValueSuggestions(currentFilter) && benefitPlanId) {
-            return (
-              <CustomFilterFieldValueInput
-                key={`${currentFilter.field}-${benefitPlanId}`}
-                label={commonProps.label}
-                value={currentFilter.value}
-                onChange={onAttributeChange("value")}
-                readOnly={readOnly}
-                field={currentFilter.field}
-                filterMeta={currentFilter}
-                moduleName={CUSTOM_FILTER_MODULE_NAME}
-                objectTypeName={CUSTOM_FILTER_OBJECT_TYPE}
-                uuidOfObject={benefitPlanId}
-                minLength={1}
-              />
-            );
-          }
-          return (
-            <NumberInput
-              min={0}
-              displayZero
-              readOnly={readOnly}
-              {...commonProps}
-            />
-          );
-        case STRING:
-        default:
-          if (currentFilter.field?.toLowerCase().includes(DATE)) {
-            return (
-              <PublishedComponent
-                pubRef="core.DatePicker"
-                readOnly={readOnly}
-                {...commonProps}
-              />
-            );
-          }
-          if (shouldUseCustomFilterValueSuggestions(currentFilter) && benefitPlanId) {
-            return (
-              <CustomFilterFieldValueInput
-                key={`${currentFilter.field}-${benefitPlanId}`}
-                label={commonProps.label}
-                value={currentFilter.value}
-                onChange={onAttributeChange("value")}
-                readOnly={readOnly}
-                field={currentFilter.field}
-                filterMeta={currentFilter}
-                moduleName={CUSTOM_FILTER_MODULE_NAME}
-                objectTypeName={CUSTOM_FILTER_OBJECT_TYPE}
-                uuidOfObject={benefitPlanId}
-                minLength={1}
-              />
-            );
-          }
-          return <TextInput readOnly={readOnly} {...commonProps} />;
+      if (type === BOOLEAN) {
+        return (
+          <SelectInput
+            options={BOOL_OPTIONS}
+            readOnly={readOnly}
+            {...commonProps}
+          />
+        );
       }
+
+      if (currentFilter.field?.toLowerCase().includes(DATE)) {
+        return (
+          <PublishedComponent
+            pubRef="core.DatePicker"
+            readOnly={readOnly}
+            {...commonProps}
+          />
+        );
+      }
+
+      if (benefitPlanId && shouldUseCustomFilterValueSuggestions(currentFilter)) {
+        return (
+          <CustomFilterFieldValueInput
+            key={`${currentFilter.field}-${currentFilter.filter}-${benefitPlanId}`}
+            label={commonProps.label}
+            value={currentFilter.value}
+            onChange={onAttributeChange("value")}
+            readOnly={readOnly}
+            field={currentFilter.field}
+            filterMeta={currentFilter}
+            moduleName={CUSTOM_FILTER_MODULE_NAME}
+            objectTypeName={CUSTOM_FILTER_OBJECT_TYPE}
+            uuidOfObject={benefitPlanId}
+            minLength={1}
+          />
+        );
+      }
+
+      if (type === INTEGER) {
+        return (
+          <NumberInput
+            min={0}
+            displayZero
+            readOnly={readOnly}
+            {...commonProps}
+          />
+        );
+      }
+
+      return <TextInput readOnly={readOnly} {...commonProps} />;
     },
     [currentFilter, readOnly, formatMessage, benefitPlanId]
   );

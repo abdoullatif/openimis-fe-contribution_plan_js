@@ -58,11 +58,21 @@ class PaymentPlanHeadPanel extends FormPanel {
             appliedCustomFilters: [],
             appliedFiltersRowStructure: [],
         };
+        this.flushCriteriaRef = null;
     }
 
     componentDidMount() {
         super.componentDidMount();
         this.syncCriteriaStateFromEdited();
+        if (this.props.headPanelRef) {
+            this.props.headPanelRef(this);
+        }
+    }
+
+    componentWillUnmount() {
+        if (this.props.headPanelRef) {
+            this.props.headPanelRef(null);
+        }
     }
 
     componentDidUpdate(prevProps, prevState, snapshot) {
@@ -75,6 +85,14 @@ class PaymentPlanHeadPanel extends FormPanel {
             this.updateAttributes({ periodicity: 1 });
         }
     }
+
+    registerCriteriaFlush = (flushFn) => {
+        this.flushCriteriaRef = flushFn;
+    };
+
+    flushAdvancedCriteria = (paymentPlan) => (
+        this.flushCriteriaRef ? (this.flushCriteriaRef(paymentPlan) || paymentPlan) : paymentPlan
+    );
 
     syncCriteriaStateFromEdited = () => {
         const filters = this.getDefaultAppliedCustomFilters();
@@ -423,9 +441,6 @@ class PaymentPlanHeadPanel extends FormPanel {
                                         <FormattedMessage module="contributionPlan" id="paymentPlan.advancedCriteria" />
                                     </div>
                                 </Typography>
-                                <div className={classes.item}>
-                                    <FormattedMessage module="contributionPlan" id="paymentPlan.advancedCriteria.tip" />
-                                </div>
                                 <Divider />
                                 <Grid container className={classes.item}>
 
@@ -442,6 +457,7 @@ class PaymentPlanHeadPanel extends FormPanel {
                                         getDefaultAppliedCustomFilters={(jsonExt) =>
                                             this.getDefaultAppliedCustomFilters(jsonExt ?? paymentPlan.jsonExt)
                                         }
+                                        registerCriteriaFlush={this.registerCriteriaFlush}
                                         readOnly={readOnly}
                                         />
 
